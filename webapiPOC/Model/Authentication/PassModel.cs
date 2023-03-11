@@ -2,7 +2,7 @@
 
 namespace webapiPOC.Model.Authentication
 {
-    public class changePassModel
+    public class ChangePassModel
     {
         [Required(ErrorMessage = "current email is required")]
         [EmailAddress]
@@ -14,5 +14,19 @@ namespace webapiPOC.Model.Authentication
         [Required(ErrorMessage ="password required ")]
         [DataType(DataType.Password)]
         public string newPass { get; set; }
+    }
+
+    public class forgetPassModel
+    {
+        [Required(ErrorMessage = "current email is required")]
+        [EmailAddress]
+        public string email { get; set; }
+
+        [Required(ErrorMessage = "password required ")]
+        [DataType(DataType.Password)]
+        public string newPass { get; set; }
+
+        [Required]
+        public string Token { get; set; }
     }
 }

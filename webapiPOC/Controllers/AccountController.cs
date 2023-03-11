@@ -91,7 +91,7 @@ namespace webapiPOC.Controllers
             //checking user and password and 2FA
             var user = await _userManager.FindByEmailAsync(loginmodel.Email);
 
-            if (user.TwoFactorEnabled)
+            if (user.TwoFactorEnabled && await _userManager.CheckPasswordAsync(user, loginmodel.Password))
             {
                 var token = await _userManager.GenerateTwoFactorTokenAsync(user, "Email");
 
@@ -180,7 +180,7 @@ namespace webapiPOC.Controllers
 
         [HttpPost]
         [Route("changePass")]
-        public async Task<IActionResult> changePass([FromBody] changePassModel newPass)
+        public async Task<IActionResult> changePass([FromBody] ChangePassModel newPass)
         {
             var user = await _userManager.FindByEmailAsync(newPass.email);
             if (user != null)
@@ -206,14 +206,60 @@ namespace webapiPOC.Controllers
             return StatusCode(StatusCodes.Status500InternalServerError, "Error internally!");
         }
 
-        //public async Task<IActionResult> forgetPass()
-        //{
-        //    _userManager.loc
-        //}
+        [HttpGet("forget-Password")]
+        public async Task<IActionResult> forgetPass(string email)
+        {
+            var user = await _userManager.FindByEmailAsync(email);
+            if (user != null)
+            {
+                var token = await _userManager.GeneratePasswordResetTokenAsync(user);
 
-        //testing email actionresult
+                var resetPassLink = Url.Action(nameof(resetPassword), "Account", new { token, email = user.Email }, Request.Scheme);
+                var message = new Message(new string[] { user.Email! }, "Link for Password Reset ", resetPassLink!);
+                _emailService.SendEmail(message);
+                return StatusCode(StatusCodes.Status201Created, $"we have sent link to {user.Email} successfully!");
+            }
+            return StatusCode(StatusCodes.Status404NotFound, "user not found");
+        }
 
-        [HttpGet]
+        [HttpGet("reset-Password")]
+        public IActionResult resetPassword(string token, string email)
+        {
+            var model = new forgetPassModel()
+            {
+                Token = token,
+                email = email
+            };
+            return Ok(new { model });
+        }
+
+        [HttpPost("reset-Password")]
+        public async Task<IActionResult> resetPassword([FromBody]forgetPassModel forgetPass)
+        {
+            var user = await _userManager.FindByEmailAsync(forgetPass.email);
+            if (user != null)
+            {
+                var result = await _userManager.ResetPasswordAsync(user, forgetPass.Token, forgetPass.newPass);
+                if (result.Succeeded)
+                {
+                    var message = new Message(new string[] { user.Email! },
+                        "Password reset successfully", "Password reset successfully. if not you then contact admin immediatly");
+                    _emailService.SendEmail(message);
+                    return StatusCode(StatusCodes.Status201Created, $"password reset and success email sent to {user.Email} successfully!");
+                }
+
+                //Code-start (For displaying error we use this logic)
+                foreach(var error in result.Errors)
+                {
+                    ModelState.AddModelError(error.Code, error.Description);
+                }
+                return Ok(ModelState);
+                //Code-End
+            }
+            return StatusCode(StatusCodes.Status404NotFound, "user not found");
+        }
+
+        [HttpGet("tsetEmail")]
         public IActionResult testEmail()
         {
             var message =
@@ -227,7 +273,7 @@ namespace webapiPOC.Controllers
         //this is private method for generating token
         private JwtSecurityToken GetToken(List<Claim> authClaim)
         {
-            var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:Secret"]));
+            var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:Secret"]!));
 
             var token = new JwtSecurityToken(
                 issuer: _configuration["JWT:ValidIssuer"],
